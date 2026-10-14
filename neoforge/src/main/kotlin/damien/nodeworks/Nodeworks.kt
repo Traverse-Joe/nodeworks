@@ -62,6 +62,7 @@ class Nodeworks(modBus: IEventBus, container: ModContainer) {
         PlatformServices.modState = NeoForgeModStateService()
         PlatformServices.fakePlayer = damien.nodeworks.platform.NeoForgeFakePlayerService()
         PlatformServices.serverNetworking = NeoForgeServerNetworkingService()
+        PlatformServices.coolantRating = damien.nodeworks.registry.NodeworksDataMaps::coolantRating
 
         // Register the server-scoped config. Per-world file at
         // `serverconfig/nodeworks-server.toml` is auto-generated on first load
@@ -82,6 +83,8 @@ class Nodeworks(modBus: IEventBus, container: ModContainer) {
         // Expose Item-handler capability for our Container BEs. Without this,
         // hoppers and the Export Chest's push side can't see them as inventories.
         modBus.addListener(::onRegisterCapabilities)
+
+        modBus.addListener(damien.nodeworks.registry.NodeworksDataMaps::register)
 
         // Register game events on the NeoForge event bus
         NeoForge.EVENT_BUS.addListener(::onServerTick)

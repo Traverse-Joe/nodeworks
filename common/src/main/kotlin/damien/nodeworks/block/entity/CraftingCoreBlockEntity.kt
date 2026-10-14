@@ -3,7 +3,9 @@ package damien.nodeworks.block.entity
 import damien.nodeworks.network.Connectable
 import damien.nodeworks.network.NodeConnectionHelper
 import damien.nodeworks.registry.ModBlockEntities
+import damien.nodeworks.platform.PlatformServices
 import damien.nodeworks.script.cpu.BufferState
+import damien.nodeworks.script.cpu.CoolantRating
 import damien.nodeworks.script.cpu.CpuOpExecutor
 import damien.nodeworks.script.cpu.CpuRules
 import damien.nodeworks.script.cpu.CraftPlan
@@ -499,8 +501,6 @@ class CraftingCoreBlockEntity(
         // Heat value per heat-gen, so we can count which heat is "reached" by Stabilizers.
         val heatByPosition = HashMap<BlockPos, Int>()
         val substratePositions = HashSet<BlockPos>()
-        // HashSet so the per-heat-gen loop can test face-neighbor membership in O(1).
-        val stabilizerPositions = HashSet<BlockPos>()
         val coProcessorPositions = ArrayList<BlockPos>()
         val bufferPositions = ArrayList<BlockPos>()
 
@@ -536,9 +536,6 @@ class CraftingCoreBlockEntity(
                             heatByPosition[neighbor] = entity.heat
                             coProcessorPositions.add(neighbor)
                         }
-                        is StabilizerBlockEntity -> {
-                            stabilizerPositions.add(neighbor)
-                        }
                         is SubstrateBlockEntity -> {
                             totalTypes += CpuRules.SUBSTRATE_TYPE_CONTRIBUTION
                             substratePositions.add(neighbor)
@@ -571,17 +568,35 @@ class CraftingCoreBlockEntity(
         // bonus from adjacent stabilizers), then divide that output across its heat-gen
         // face-neighbors. The resulting per-face contribution is what each touched
         // heat-gen receives from this particular stabilizer face.
+        val coolantCache = HashMap<BlockPos, CoolantRating?>()
+        fun coolantAt(p: BlockPos): CoolantRating? {
+            if (p in heatGenPositions || p == worldPosition) return null
+            if (coolantCache.containsKey(p)) return coolantCache[p]
+            val lvl = level ?: return null
+            val rating = if (lvl.isLoaded(p)) PlatformServices.coolantRating(lvl.getBlockState(p)) else null
+            coolantCache[p] = rating
+            return rating
+        }
+        // HashSet so the per-heat-gen loop can test face-neighbor membership in O(1).
+        val coolantPositions = HashSet<BlockPos>()
+        for (pos in heatGenPositions) {
+            for (dir in net.minecraft.core.Direction.entries) {
+                val n = pos.relative(dir)
+                if (coolantAt(n) != null) coolantPositions.add(n)
+            }
+        }
         val stabContributionPerFace = HashMap<BlockPos, Float>()
-        for (pos in stabilizerPositions) {
+        for (pos in coolantPositions) {
+            val rating = coolantAt(pos) ?: continue
             var stabNeighbors = 0
             var heatGenNeighbors = 0
             for (dir in net.minecraft.core.Direction.entries) {
                 val n = pos.relative(dir)
-                if (n in stabilizerPositions) stabNeighbors++
-                else if (n in heatGenPositions) heatGenNeighbors++
+                if (n in heatGenPositions) heatGenNeighbors++
+                else if (coolantAt(n) != null) stabNeighbors++
             }
             if (heatGenNeighbors <= 0) continue  // stabilizer with no heat-gen contact does nothing
-            val output = CpuRules.STABILIZER_BASE_COOLING + stabNeighbors * CpuRules.STABILIZER_CLUSTER_BONUS
+            val output = rating.baseCooling + stabNeighbors * rating.clusterBonus
             stabContributionPerFace[pos] = output / heatGenNeighbors
         }
 

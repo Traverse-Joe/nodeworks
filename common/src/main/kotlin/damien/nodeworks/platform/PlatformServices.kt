@@ -48,6 +48,8 @@ object PlatformServices {
      *  Hold-G progress bar. Default always returns false so unconfigured loaders just
      *  never show a hold-progress bar. */
     var openDocsKeyHeld: () -> Boolean = { false }
+
+    var coolantRating: (BlockState) -> damien.nodeworks.script.cpu.CoolantRating? = { null }
 }
 
 /**

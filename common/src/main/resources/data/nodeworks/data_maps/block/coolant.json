@@ -1,0 +1,8 @@
+{
+  "values": {
+    "nodeworks:stabilizer": {
+      "base_cooling": 1.0,
+      "cluster_bonus": 1.0
+    }
+  }
+}
